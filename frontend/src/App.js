@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
   Activity, ArrowDownToLine, ArrowUpFromLine, Battery, BatteryCharging, Boxes,
   ChevronRight, ChevronLeft, ChevronDown, Edit3, LayoutDashboard, Plus, Search,
-  Users, X, Trash2, Zap, Package, AlertTriangle, CheckCircle2, XCircle, Minus,
-  Menu, PanelLeftClose, Truck, Settings as SettingsIcon, TrendingUp, ShoppingCart,
-  Flame, RefreshCcw
+  Users, X, Trash2, Zap, Package, CheckCircle2, Minus,
+  Menu, PanelLeftClose, Truck, XCircle
 } from 'lucide-react';
 import '@/App.css';
 import '@/responsive.css';
@@ -54,7 +53,6 @@ export default function App() {
     ['dealers', 'Dealers', Users],
     ['suppliers', 'Suppliers', Truck],
     ['catalog', 'Brands', BatteryCharging],
-    ['settings', 'Settings', SettingsIcon],
   ];
 
   const titles = {
@@ -64,7 +62,6 @@ export default function App() {
     dealers: 'Dealers',
     suppliers: 'Suppliers',
     catalog: 'Brands',
-    settings: 'Settings',
   };
 
   const goto = (id) => { setTab(id); setSelectedBrand(null); setMobileOpen(false); };
@@ -143,7 +140,6 @@ export default function App() {
             selectedBrand={selectedBrand} setSelectedBrand={setSelectedBrand}
             onReload={load} />
         )}
-        {tab === 'settings' && <SettingsPage onReset={load} />}
       </main>
 
       {modal && (
@@ -182,31 +178,9 @@ function Dashboard({ dash, stock, data, setTab, setModal, setSelectedBrand, setD
 
   const brandData = data.brands.map(b => {
     const rows = stock.filter(s => s.brand_id === b.id);
-    const total = rows.reduce((a, x) => a + (x.available || 0), 0);
-    const low = rows.filter(r => r.available > 0 && r.available <= r.reorder_level).length;
-    const out = rows.filter(r => r.available <= 0).length;
-    return { ...b, rows, total, low, out };
+    const outRows = rows.filter(r => r.available <= 0);
+    return { ...b, rows, outRows };
   });
-
-  // Reorder recommendations — sort by urgency (out first, then low)
-  const reorderList = useMemo(() => {
-    return stock
-      .filter(s => s.available <= s.reorder_level)
-      .map(s => ({
-        ...s,
-        urgency: s.available <= 0 ? 2 : 1,
-        suggested: Math.max((s.reorder_level || 10) * 2 - s.available, s.reorder_level || 10),
-      }))
-      .sort((a, b) => b.urgency - a.urgency || a.available - b.available);
-  }, [stock]);
-
-  // Top movers by outward
-  const topMovers = useMemo(() => {
-    return [...stock]
-      .filter(s => s.outward > 0)
-      .sort((a, b) => b.outward - a.outward)
-      .slice(0, 5);
-  }, [stock]);
 
   const openBrand = (id) => { setSelectedBrand(id); setTab('catalog'); };
   const isEmpty = stock.length === 0;
@@ -249,7 +223,7 @@ function Dashboard({ dash, stock, data, setTab, setModal, setSelectedBrand, setD
       </section>
 
       {/* Analytics — clickable */}
-      <section className="analytics-row">
+      <section className="analytics-row two">
         <AnalyticCard testId="analytics-available" label="Total units available"
           value={(dash.available || 0).toLocaleString()} icon={Boxes} tone="blue"
           onClick={() => openStockList(s => s.available > 0, 'All available stock')} />
@@ -257,108 +231,13 @@ function Dashboard({ dash, stock, data, setTab, setModal, setSelectedBrand, setD
           value={dash.in_stock_models || 0} sub={`of ${dash.total_models || 0} models`}
           icon={CheckCircle2} tone="green"
           onClick={() => openStockList(s => s.available > 0, 'Models in stock')} />
-        <AnalyticCard testId="analytics-low-stock" label="Low stock"
-          value={dash.low_stock_models || 0} sub="reorder recommended"
-          icon={AlertTriangle} tone="amber"
-          onClick={() => openStockList(s => s.available > 0 && s.available <= s.reorder_level, 'Low stock — reorder soon')} />
-        <AnalyticCard testId="analytics-out-of-stock" label="Out of stock"
-          value={dash.out_of_stock_models || 0} sub="tap to see what's out"
-          icon={XCircle} tone="red"
-          onClick={() => openStockList(s => s.available <= 0, 'Out of stock — order now')} />
       </section>
 
-      {/* Order next + Top movers */}
-      <section className="insight-split">
-        <div className="insight-card order-next" data-testid="order-next-panel">
-          <div className="insight-head">
-            <div className="insight-title">
-              <div className="insight-icon amber"><ShoppingCart size={17} /></div>
-              <div>
-                <div className="eyebrow">WHAT TO ORDER NEXT</div>
-                <h3>Reorder recommendations</h3>
-              </div>
-            </div>
-            <span className="pill">{reorderList.length}</span>
-          </div>
-          {reorderList.length === 0 ? (
-            <div className="all-good">
-              <CheckCircle2 size={30} />
-              <b>All stocks healthy</b>
-              <small>Nothing needs reordering right now.</small>
-            </div>
-          ) : (
-            <div className="reorder-list">
-              {reorderList.slice(0, 6).map(r => {
-                const M = typeMeta[r.product_type] || typeMeta.battery;
-                const IconX = M.icon;
-                return (
-                  <div className="reorder-row" key={r.product_id}
-                    data-testid={`reorder-row-${r.product_id}`}>
-                    <span className={`type-icon ${M.tone}`}><IconX size={15} /></span>
-                    <div className="reorder-body">
-                      <b>{r.brand} · {r.product}</b>
-                      <small>Have {r.available} · reorder at {r.reorder_level}</small>
-                    </div>
-                    <div className="reorder-cta">
-                      <span className={`status ${r.available <= 0 ? 'red' : 'warn'}`}>
-                        {r.available <= 0 ? 'ORDER NOW' : 'ORDER SOON'}
-                      </span>
-                      <b>+{r.suggested}</b>
-                      <em>suggested</em>
-                    </div>
-                  </div>
-                );
-              })}
-              {reorderList.length > 6 && (
-                <button className="text-btn"
-                  onClick={() => openStockList(s => s.available <= s.reorder_level, 'All reorder items')}>
-                  See all {reorderList.length} <ChevronRight size={13} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="insight-card top-movers" data-testid="top-movers-panel">
-          <div className="insight-head">
-            <div className="insight-title">
-              <div className="insight-icon violet"><Flame size={17} /></div>
-              <div>
-                <div className="eyebrow">FAST MOVING</div>
-                <h3>Top movers</h3>
-              </div>
-            </div>
-          </div>
-          {topMovers.length === 0 ? (
-            <div className="empty">No movement yet. Record a stock out to see leaders.</div>
-          ) : (
-            <div className="mover-list">
-              {topMovers.map((m, i) => {
-                const M = typeMeta[m.product_type] || typeMeta.battery;
-                const IconX = M.icon;
-                const max = topMovers[0].outward || 1;
-                return (
-                  <div className="mover-row" key={m.product_id}>
-                    <span className="mover-rank">{i + 1}</span>
-                    <span className={`type-icon ${M.tone}`}><IconX size={14} /></span>
-                    <div className="mover-body">
-                      <b>{m.brand} · {m.product}</b>
-                      <div className="bar"><i style={{ width: `${(m.outward / max) * 100}%` }} /></div>
-                    </div>
-                    <div className="mover-qty"><strong>{m.outward}</strong><small>sold</small></div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Brand cards */}
+      {/* Out of stock by brand */}
       <div className="section-head">
         <div>
-          <div className="eyebrow">STOCK BY BRAND</div>
-          <h3>Tap a brand to expand</h3>
+          <div className="eyebrow">OUT OF STOCK BY BRAND</div>
+          <h3>What's missing per brand</h3>
         </div>
         <button className="text-btn" onClick={() => setTab('stock')}>
           Full stock view <ChevronRight size={14} />
@@ -368,6 +247,7 @@ function Dashboard({ dash, stock, data, setTab, setModal, setSelectedBrand, setD
       <section className="brand-grid">
         {brandData.map(b => {
           const expanded = expandedBrand === b.id;
+          const outCount = b.outRows.length;
           return (
             <div key={b.id} className={`brand-card ${expanded ? 'expanded' : ''}`}>
               <button className="brand-head" onClick={() => setExpandedBrand(expanded ? null : b.id)}
@@ -375,18 +255,25 @@ function Dashboard({ dash, stock, data, setTab, setModal, setSelectedBrand, setD
                 <div className="brand-avatar big">{b.name[0]}</div>
                 <div className="brand-title">
                   <b>{b.name}</b>
-                  <small>{b.rows.length} models · {b.total} units</small>
+                  <small>{outCount === 0 ? 'All models available' : `${outCount} of ${b.rows.length} models out`}</small>
                 </div>
                 <div className="brand-badges">
-                  {b.low > 0 && <span className="chip amber">{b.low} low</span>}
-                  {b.out > 0 && <span className="chip red">{b.out} out</span>}
+                  {outCount > 0
+                    ? <span className="chip red">{outCount} out</span>
+                    : <span className="chip battery">healthy</span>}
                 </div>
                 <ChevronDown size={18} className={`chev ${expanded ? 'rot' : ''}`} />
               </button>
               {expanded && (
                 <div className="brand-body">
-                  {b.rows.length === 0 && <div className="empty">No products yet. Add one from Brands.</div>}
-                  {b.rows.map(r => {
+                  {b.outRows.length === 0 && (
+                    <div className="all-good compact">
+                      <CheckCircle2 size={22} />
+                      <b>Nothing out of stock for {b.name}</b>
+                      <small>Every model has at least one unit available.</small>
+                    </div>
+                  )}
+                  {b.outRows.map(r => {
                     const M = typeMeta[r.product_type] || typeMeta.battery;
                     const IconX = M.icon;
                     return (
@@ -397,11 +284,9 @@ function Dashboard({ dash, stock, data, setTab, setModal, setSelectedBrand, setD
                           <small>{M.label} · {r.capacity || r.model || '—'}</small>
                         </div>
                         <div className="qty-block">
-                          <strong>{r.available}</strong><span>available</span>
+                          <strong className="red">0</strong><span>available</span>
                         </div>
-                        <span className={`status ${r.available <= 0 ? 'red' : r.low ? 'warn' : 'ok'}`}>
-                          {r.available <= 0 ? 'OUT' : r.low ? 'LOW' : 'OK'}
-                        </span>
+                        <span className="status red">OUT</span>
                       </div>
                     );
                   })}
@@ -1240,45 +1125,4 @@ function PartyProfile({ id, kind, onClose }) {
   );
 }
 
-/* ================== SETTINGS ================== */
-function SettingsPage({ onReset }) {
-  const [busy, setBusy] = useState(false);
-  const doReset = async () => {
-    const ok = window.confirm(
-      'This will permanently wipe ALL data: brands, products, dealers, suppliers, stock and history.\n\nType YES in the next prompt to confirm.'
-    );
-    if (!ok) return;
-    const typed = window.prompt('Type YES to confirm reset');
-    if (typed !== 'YES') return;
-    setBusy(true);
-    try {
-      await axios.post(`${API}/admin/reset`);
-      onReset();
-      alert('All data cleared. You have a fresh canvas.');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="content">
-      <div className="directory-head">
-        <div>
-          <div className="eyebrow blue">SETTINGS</div>
-          <h2>Workspace controls</h2>
-          <p>Administrative actions. Use with care.</p>
-        </div>
-      </div>
-      <div className="settings-card danger">
-        <div className="settings-icon"><RefreshCcw size={22} /></div>
-        <div className="settings-body">
-          <b>Reset everything</b>
-          <p>Erase all brands, products, dealers, suppliers, stock and history. This cannot be undone.</p>
-        </div>
-        <button data-testid="reset-all-button" className="danger-btn"
-          disabled={busy} onClick={doReset}>
-          {busy ? 'Resetting…' : 'Reset all data'}
-        </button>
-      </div>
-    </div>
-  );
-}
+/* ================== END ================== */

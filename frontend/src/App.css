@@ -80,6 +80,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-seri
 
 /* ---------- analytics (clickable) ---------- */
 .analytics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+.analytics-row.two{grid-template-columns:repeat(2,1fr)}
 .analytic{background:#fff;border:1px solid var(--line);border-radius:11px;padding:16px;display:flex;gap:13px;align-items:flex-start;box-shadow:var(--shadow-sm);transition:.18s;cursor:pointer;text-align:left;color:var(--text);position:relative;font-family:inherit}
 .analytic:hover{transform:translateY(-2px);border-color:#a9c7ee;box-shadow:var(--shadow-md)}
 .analytic:hover .analytic-arrow{opacity:1;transform:translateX(0)}
@@ -105,6 +106,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-seri
 .insight-title h3{font:700 20px 'Barlow Condensed';margin:2px 0 0}
 .pill{background:var(--blue-soft);color:var(--blue);font:700 11px JetBrains Mono;padding:5px 10px;border-radius:20px;letter-spacing:.6px}
 .all-good{text-align:center;padding:26px 12px;color:var(--muted)}
+.all-good.compact{padding:16px 8px}
+.all-good.compact b{font-size:14px;margin-top:6px}
 .all-good svg{color:var(--green)}
 .all-good b{display:block;font:700 18px 'Barlow Condensed';color:var(--text);margin-top:10px}
 .all-good small{font-size:12px;display:block;margin-top:4px}
