@@ -1,0 +1,20 @@
+@media (max-width: 900px) {
+  .brandmark > div:last-child { display: none; }
+  .brandmark { margin-left: auto; margin-right: auto; }
+  .main, .content, .split, .panel { min-width: 0; }
+  .toolbar { flex-wrap: wrap; }
+  .searchbox { max-width: none; flex-basis: 100%; }
+}
+@media (max-width: 600px) {
+  html, body { overflow-x: hidden; }
+  .topbar h1 { font-size: 26px; }
+  .hero-strip { align-items: flex-start; gap: 24px; flex-direction: column; }
+  .hero-stat { text-align: left; }
+  .hero-stat strong { font-size: 54px; }
+  .kpi-grid { gap: 10px; }
+  .kpi { padding: 14px; }
+  .kpi strong { font-size: 29px; }
+  .table-note { display: none; }
+  .panel, .table-panel { padding: 17px; }
+  .form-row { grid-template-columns: 1fr; }
+}

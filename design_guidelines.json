@@ -1,0 +1,75 @@
+{
+  "app_name": "VoltPulse Inverter & Battery Distribution Manager",
+  "app_type": "hybrid_fullstack dashboard",
+  "description": "One-stop administrative workspace for lightning-fast inverter and battery inventory distribution, tracking stock inward from suppliers, outward to dealers, serial number traceability, and brand/model analytics without login friction.",
+  "target_audience": "Battery distributors, warehouse managers, and wholesale operations",
+  "emotional_tone": "Precise, authoritative, command-center efficient, robust industrial",
+  "typography": {
+    "heading_font": "Barlow Condensed",
+    "body_font": "Inter",
+    "mono_font": "JetBrains Mono",
+    "weights": ["400", "500", "600", "700", "900"],
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold",
+      "h4": "text-lg font-semibold",
+      "body": "text-sm sm:text-base",
+      "small": "text-xs"
+    }
+  },
+  "colors": {
+    "archetype": "THE PERFORMANCE PRO (Elite Athleticism, Precision & Industrial Control)",
+    "primary": "#FF5722",
+    "primary_hover": "#E64A19",
+    "accent": "#00E676",
+    "background": "#0F1115",
+    "surface": "#161B22",
+    "surface_elevated": "#21262D",
+    "border": "#30363D",
+    "text_main": "#F0F6FC",
+    "text_muted": "#8B949E",
+    "danger": "#F85149",
+    "warning": "#D29922",
+    "success": "#3FB950"
+  },
+  "surface_strategies": {
+    "card": "bg-[#161B22] border border-[#30363D] rounded-xl p-6 shadow-sm hover:border-[#FF5722]/50 transition-colors",
+    "header": "bg-[#0F1115]/90 backdrop-blur-xl border-b border-[#30363D] sticky top-0 z-50",
+    "table_row": "border-b border-[#30363D]/50 hover:bg-[#21262D]/50 transition-colors"
+  },
+  "grids": {
+    "dashboard_bento": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+    "form_grid": "grid grid-cols-1 md:grid-cols-2 gap-6"
+  },
+  "motion": {
+    "transition_standard": "transition-all duration-200 ease-out",
+    "hover_lift": "hover:-translate-y-0.5"
+  },
+  "accessibility": {
+    "contrast_ratio": "Exceeds WCAG AAA for text against dark industrial background",
+    "focus_states": "focus:ring-2 focus:ring-[#FF5722] focus:outline-none",
+    "data_testid_convention": "All interactive and informational elements include kebab-case data-testid attributes"
+  },
+  "image_urls": [
+    {
+      "category": "warehouse_hero",
+      "url": "https://images.unsplash.com/photo-1553413077-190dd305871c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Industrial warehouse interior with racking"
+    },
+    {
+      "category": "battery_stack",
+      "url": "https://images.unsplash.com/photo-1637773339519-679b29199c18?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "description": "Compact energy storage inverter batteries"
+    }
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic outputs. Make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Every interaction needs micro-animations - hover states, transitions, entrance animations.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "All interactive and key informational elements MUST include a data-testid attribute.",
+    "NO LOGIN REQUIRED - one-stop admin workspace as requested by user.",
+    "Ensure lightning-fast stock inward and outward entry with quick-add master records."
+  ]
+}
