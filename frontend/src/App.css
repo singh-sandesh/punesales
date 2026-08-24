@@ -160,9 +160,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-seri
 
 /* ---------- brand tiles + product cards ---------- */
 .brand-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.brand-tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;align-items:center;gap:13px;cursor:pointer;color:var(--text);text-align:left;transition:.18s;box-shadow:var(--shadow-sm)}
+.brand-tile{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;align-items:center;gap:13px;cursor:pointer;color:var(--text);text-align:left;transition:.18s;box-shadow:var(--shadow-sm);position:relative}
 .brand-tile:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:#a9c7ee}
-.brand-tile-body{flex:1;min-width:0}
+.brand-tile-body{flex:1;min-width:0;padding-right:26px}
 .brand-tile-body b{display:block;font:700 16px 'Barlow Condensed'}
 .brand-tile-body small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
 .brand-tile>svg{color:var(--muted);flex-shrink:0}
@@ -177,6 +177,9 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-seri
 .product-card-foot strong{font:700 22px 'Barlow Condensed';color:var(--blue)}
 .icon-remove{margin-left:auto;background:#fff;border:1px solid var(--line);color:var(--red);width:28px;height:28px;display:grid;place-items:center;cursor:pointer;border-radius:6px;transition:.15s}
 .icon-remove:hover{background:var(--red-soft);border-color:var(--red)}
+.card-remove{position:absolute;top:10px;right:10px;margin-left:0;opacity:0;transition:.15s;background:#fff}
+.dealer-card:hover .card-remove,.brand-tile:hover .card-remove,.card-remove:focus{opacity:1}
+@media (hover: none){.card-remove{opacity:1}}
 .product-empty{grid-column:1/-1}
 
 /* ---------- type + chips ---------- */
@@ -258,8 +261,9 @@ tbody tr:hover{background:#f8fbff}
 .directory-head h2{font:700 32px 'Barlow Condensed';margin:6px 0 4px;letter-spacing:.3px}
 .directory-head p{color:var(--muted);font-size:13px;margin:0;max-width:520px;line-height:1.55}
 .dealer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.dealer-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;text-align:left;display:flex;gap:13px;cursor:pointer;color:var(--text);transition:.18s;box-shadow:var(--shadow-sm)}
+.dealer-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;text-align:left;display:flex;gap:13px;cursor:pointer;color:var(--text);transition:.18s;box-shadow:var(--shadow-sm);position:relative}
 .dealer-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:#a9c7ee}
+.dealer-body{flex:1;min-width:0;display:flex;flex-direction:column;padding-right:26px}
 .dealer-avatar{width:36px;height:36px;border-radius:50%;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center;font:700 16px 'Barlow Condensed';flex-shrink:0}
 .dealer-avatar.big{width:56px;height:56px;font-size:26px}
 .dealer-card b,.dealer-card small,.dealer-card em{display:flex;align-items:center}

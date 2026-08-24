@@ -136,8 +136,7 @@ async def startup():
 async def bootstrap():
     out = {}
     for col in ['brands', 'products', 'suppliers', 'dealers']:
-        docs = await db[col].find({}, {'_id': 0}).to_list(2000)
-        # keep only active for dropdowns but still return all so UI can decide
+        docs = await db[col].find({'active': {'$ne': False}}, {'_id': 0}).to_list(2000)
         out[col] = [clean(x) for x in docs]
     return out
 
@@ -203,6 +202,27 @@ async def create_master(kind: str, data: MasterIn):
            'active': True, 'created_at': now(), **data.details}
     await db[kind].insert_one(doc)
     return clean(doc)
+
+
+@api.delete('/masters/{kind}/{item_id}')
+async def delete_master(kind: str, item_id: str):
+    if kind not in ['brands', 'suppliers', 'dealers']:
+        raise HTTPException(400, 'Only brands, suppliers and dealers are supported')
+    exists = await db[kind].find_one({'id': item_id})
+    if not exists:
+        raise HTTPException(404, f'{kind[:-1]} not found')
+    if kind == 'brands':
+        has_products = await db.products.find_one({'brand_id': item_id, 'active': {'$ne': False}})
+        if has_products:
+            await db.brands.update_one({'id': item_id}, {'$set': {'active': False}})
+            return {'deactivated': True}
+    else:
+        has_tx = await db.transactions.find_one({'party_id': item_id})
+        if has_tx:
+            await db[kind].update_one({'id': item_id}, {'$set': {'active': False}})
+            return {'deactivated': True}
+    await db[kind].delete_one({'id': item_id})
+    return {'deleted': True}
 
 
 @api.post('/products')

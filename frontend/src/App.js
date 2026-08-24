@@ -128,12 +128,12 @@ export default function App() {
         {tab === 'dealers' && (
           <Directory kind="dealer" items={data.dealers}
             onSelect={(id) => setProfile({ id, kind: 'dealer' })}
-            setQuick={openQuick} />
+            setQuick={openQuick} onReload={load} />
         )}
         {tab === 'suppliers' && (
           <Directory kind="supplier" items={data.suppliers}
             onSelect={(id) => setProfile({ id, kind: 'supplier' })}
-            setQuick={openQuick} />
+            setQuick={openQuick} onReload={load} />
         )}
         {tab === 'catalog' && (
           <Catalog data={data} stock={stock} setQuick={openQuick}
@@ -666,6 +666,13 @@ function Catalog({ data, stock, setQuick, selectedBrand, setSelectedBrand, onRel
   const filtered = data.brands.filter(b =>
     b.name.toLowerCase().includes(q.toLowerCase()));
 
+  const removeBrand = async (b, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Remove brand ${b.name}? If it has products it will be archived instead.`)) return;
+    await axios.delete(`${API}/masters/brands/${b.id}`);
+    onReload();
+  };
+
   return (
     <div className="content">
       <div className="directory-head">
@@ -693,16 +700,24 @@ function Catalog({ data, stock, setQuick, selectedBrand, setSelectedBrand, onRel
           const count = data.products.filter(p => p.brand_id === b.id && p.active !== false).length;
           const units = stock.filter(s => s.brand_id === b.id).reduce((a, x) => a + x.available, 0);
           return (
-            <button className="brand-tile" key={b.id}
+            <div className="brand-tile" key={b.id}
               data-testid={`brand-tile-${b.id}`}
-              onClick={() => setSelectedBrand(b.id)}>
+              role="button" tabIndex={0}
+              onClick={() => setSelectedBrand(b.id)}
+              onKeyDown={e => { if (e.key === 'Enter') setSelectedBrand(b.id); }}>
               <div className="brand-avatar big">{b.name[0]}</div>
               <div className="brand-tile-body">
                 <b>{b.name}</b>
                 <small>{count} products · {units} units</small>
               </div>
+              <button className="icon-remove card-remove"
+                data-testid={`delete-brand-${b.id}`}
+                title="Remove brand"
+                onClick={e => removeBrand(b, e)}>
+                <Trash2 size={14} />
+              </button>
               <ChevronRight size={17} />
-            </button>
+            </div>
           );
         })}
         {filtered.length === 0 && data.brands.length > 0 && (
@@ -1013,12 +1028,18 @@ function TransactionModal({ type, data, editing, onClose, onSaved }) {
 }
 
 /* ================== DIRECTORY (Dealers / Suppliers) ================== */
-function Directory({ kind, items, onSelect, setQuick }) {
+function Directory({ kind, items, onSelect, setQuick, onReload }) {
   const [q, setQ] = useState('');
   const label = kind === 'dealer' ? 'Dealer' : 'Supplier';
   const filtered = items.filter(d =>
     [d.name, d.city || '', d.phone || ''].join(' ').toLowerCase().includes(q.toLowerCase())
   );
+  const remove = async (d, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Remove ${d.name}? If they have history the record will be archived instead.`)) return;
+    await axios.delete(`${API}/masters/${kind}s/${d.id}`);
+    onReload();
+  };
   return (
     <div className="content">
       <div className="directory-head">
@@ -1044,16 +1065,24 @@ function Directory({ kind, items, onSelect, setQuick }) {
 
       <div className="dealer-grid">
         {filtered.map(d => (
-          <button className="dealer-card" key={d.id}
+          <div className="dealer-card" key={d.id}
             data-testid={`${kind}-card-${d.id}`}
-            onClick={() => onSelect(d.id)}>
+            role="button" tabIndex={0}
+            onClick={() => onSelect(d.id)}
+            onKeyDown={e => { if (e.key === 'Enter') onSelect(d.id); }}>
             <span className="dealer-avatar">{d.name[0]}</span>
-            <span>
+            <span className="dealer-body">
               <b>{d.name}</b>
               <small>{d.city || 'No city'} · {d.phone || 'No phone'}</small>
               <em>Open history <ChevronRight size={13} /></em>
             </span>
-          </button>
+            <button className="icon-remove card-remove"
+              data-testid={`delete-${kind}-${d.id}`}
+              title={`Remove ${kind}`}
+              onClick={e => remove(d, e)}>
+              <Trash2 size={14} />
+            </button>
+          </div>
         ))}
         {filtered.length === 0 && items.length > 0 && (
           <div className="empty">No {kind} matches "{q}".</div>
