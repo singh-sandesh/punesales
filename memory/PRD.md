@@ -1,51 +1,28 @@
-# PSC Stock Control PRD
+# PSC Stock Control — Product Doc
 
-## Original problem statement
-Build a one-stop inverter battery distribution stock manager that quickly tracks how much comes in and goes out, and traces battery movement by brand, model, warehouse, supplier, and dealer. The user clarified: no login, one admin workspace, focused on practical stock control rather than a full accounting ERP.
+## Problem Statement (original)
+Production-ready web app for an inverter battery distributor. Must be traceable end-to-end: what came in, from whom, when, which brand/model, how many, where it went, which dealer received it, how much remains. Later scoped down by user to a no-login single-location admin dashboard focused on speed and traceability.
 
-## Architecture decisions
-- React frontend with a focused, simple blue-and-white workspace UI.
-- FastAPI backend with MongoDB collections for brands, products, suppliers, dealers, warehouses, inventory, and transactions.
-- Dynamic master records and transaction APIs; stock is calculated from inventory movement records.
-- No authentication by explicit user choice.
-- Frontend calls only `REACT_APP_BACKEND_URL`; backend uses only existing `MONGO_URL` and `DB_NAME`.
+## Users
+- Owner/Admin (self) — main daily user, records movements, checks stock, plans reorders.
 
-## User personas
-- Owner: wants an immediate, accurate view of available stock and business movement.
-- Warehouse/admin operator: needs fast stock-in and stock-out entry with dealer/supplier traceability.
+## Latest scope (Iteration 4, Feb 2026)
+- Single-location model, no login, no money/cost display.
+- Product types: Battery, Inverter, Trolley.
+- Cart-style transaction UX (multi-item stock in/out).
+- Full traceability via ledger + editable transactions with audit trail and delta-based recalculation.
 
-## Core requirements (static)
-- View current stock by brand, model, and warehouse.
-- Record inward receipts and outward dealer dispatches quickly.
-- Prevent outward transactions from creating negative available stock.
-- Keep a movement ledger with transaction IDs, quantities, values, references, and timestamps.
-- Support dynamic brands and battery products.
-- Provide clear KPIs, low-stock indicators, search, and brand filters.
+## Implemented so far
+- Backend (FastAPI + Motor/MongoDB): /api/bootstrap, /api/stock, /api/dashboard, /api/ledger, /api/masters/{kind}, /api/products (POST/DELETE), /api/transactions (POST/PUT with delta math), /api/dealers/{id}/profile, /api/suppliers/{id}/profile, /api/admin/reset. Seed marker in db.system so reset stays reset.
+- Frontend (React): Dashboard (big Stock In/Out, clickable analytics cards, What to order next + Top movers, expandable brand cards, recent activity), Current Stock with search + brand/type/status filters, History with search + kind filter, Dealers directory with search, Suppliers directory with search, Brands with drill-in per brand + add/delete products, Settings with reset, cart-style transaction modal (no quick-add clutter), Sidebar collapse (desktop) + mobile hamburger overlay.
 
-## What's implemented
-### 2026-02-21 — Focused stock workspace MVP
-- Replaced the starter screen with VoltPulse dashboard, current stock view, and movement ledger.
-- Added seeded Exide, Massimo, and Microtek brands; nine battery models; suppliers, dealers, warehouses, and realistic inventory positions.
-- Added working stock inward/outward posting, automatic inventory updates, negative-stock rejection, transaction history, search, filters, and mobile responsive layout.
-- Added quick battery-model creation modal and correct inventory valuation from product purchase rates.
+## Backlog (P1)
+- Dealer/supplier detail: exportable ledger (PDF/Excel).
+- Attach documents (invoice PDFs) to a movement.
+- Auto-suggest reorder quantities per product beyond the current heuristic.
+- Simple payments tracking (invoice amount, paid, due date) once user asks for it.
 
-### 2026-02-21 — PSC workflow expansion
-- Renamed the product to PSC and refreshed the UI with a clean blue-and-white theme.
-- Added multi-model movement entry, quick supplier/dealer/warehouse creation with automatic selection, and dealer directory/profile views.
-- Added dealer opening balance plus dispatch totals for outstanding balance, brand/model preference summaries, and dispatch history.
-- Added validation so an empty movement cannot be posted.
-
-## Prioritized backlog
-- P0: Add quick-add brand directly inside stock movement forms and connect new brands to product creation.
-- P0: Add multi-line transactions so one receipt/dispatch can contain many models.
-- P1: Add returns, damaged/defective buckets, transfers, adjustments, and opening stock.
-- P1: Add dealer and supplier profile pages with movement history.
-- P1: Add date/warehouse/party filters and exportable filtered ledger.
-- P2: Add serial number traceability, attachments, drafts, reversal workflow, and audit history.
-- P2: Add aging, fast/slow movement reports, printable documents, and company settings.
-
-## Remaining next tasks
-1. Build quick-add contextual master modals and automatically select new records.
-2. Support multi-item inward/outward forms with duplicate reference warnings.
-3. Add stock transfers, returns, adjustments, and physical reconciliation.
-4. Expand dashboard analytics and filtered exports after the core movement flow is complete.
+## Backlog (P2)
+- Serial-number tracking for warranty-critical batteries.
+- Returns management (dealer / supplier / damaged / defective bins).
+- Multi-user access with roles.

@@ -1,0 +1,42 @@
+{
+  "summary": "Tested the live single-location API and desktop/mobile UI. Core navigation, searchable movements, catalog controls, history editing UI, multi-item controls, and dealer profile work; posted movement edit recalculates available stock but corrupts inward/outward totals.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/transactions/{transaction_id}",
+        "issue": "Editing a posted inward movement reverses available stock but increments the inward counter instead of decrementing it. A 7-unit inward corrected to 4 left available=4 but inward increased to 18. The same direction-sign bug affects outward counters and kind changes.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Mobile all pages",
+        "issues": ["At 390px the 238px sidebar remains visible and the main content is squeezed/clipped into the remaining width; navigation/content is not practically usable despite document scrollWidth being hidden to the viewport."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_single_location_api.py",
+    "/app/test_reports/pytest/single_location_iteration3.xml",
+    "/app/test_reports/pytest/pytest_results_iteration3_public.xml"
+  ],
+  "action_items": [
+    "Fix reverse_transaction/stock_change so reversing a posted movement decrements the original inward/outward counters, then apply the corrected movement; verify edits that change inward to outward too.",
+    "Add a mobile navigation/layout treatment (collapse or hide the sidebar and give main content full width) rather than relying on overflow-x hidden."
+  ],
+  "critical_code_review_comments": [
+    "stock_change applies inward/outward counter increments independent of direction, so reverse_transaction is not mathematically inverse and audit edits silently corrupt aggregate stock metrics."
+  ],
+  "updated_files": ["/app/backend/tests/test_single_location_api.py", "/app/test_reports/iteration_3.json"],
+  "success_rate": {"backend": "50% (1/2 focused tests; edit recalculation failed counter assertion)", "frontend": "100% exercised flows; mobile usability issue found"},
+  "seed_data_creation": "Focused API test created TEST-prefixed brand, battery, and inward movement, then edited that movement. Existing preview database also contains prior TEST/UI regression records. No APIs were mocked.",
+  "retest_needed": true,
+  "should_call_test_agent_after_fix": true,
+  "context_for_next_testing_agent": "Warehouse removal is reflected: bootstrap omits warehouses and all stock rows use main-stock. Supplier/dealer/battery typeahead, brand quick-add control, multi-item line controls, history edit modal, catalog, stock-out search, and dealer profile were exercised successfully. Re-run the focused test after fixing counter reversal, and test mobile navigation usability.",
+  "rca of the issue": "In server.py, stock_change computes available delta using direction but increments inward/outward using only kind. reverse_transaction therefore subtracts available while adding to the original movement counter; applying the edited movement adds counters again. This leaves available apparently correct but aggregate inward/outward totals wrong."
+}
