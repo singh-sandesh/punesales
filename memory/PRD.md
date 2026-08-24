@@ -1,10 +1,10 @@
-# VoltPulse Stock Control PRD
+# PSC Stock Control PRD
 
 ## Original problem statement
 Build a one-stop inverter battery distribution stock manager that quickly tracks how much comes in and goes out, and traces battery movement by brand, model, warehouse, supplier, and dealer. The user clarified: no login, one admin workspace, focused on practical stock control rather than a full accounting ERP.
 
 ## Architecture decisions
-- React frontend with a focused dark industrial command-center UI.
+- React frontend with a focused, simple blue-and-white workspace UI.
 - FastAPI backend with MongoDB collections for brands, products, suppliers, dealers, warehouses, inventory, and transactions.
 - Dynamic master records and transaction APIs; stock is calculated from inventory movement records.
 - No authentication by explicit user choice.
@@ -29,8 +29,14 @@ Build a one-stop inverter battery distribution stock manager that quickly tracks
 - Added working stock inward/outward posting, automatic inventory updates, negative-stock rejection, transaction history, search, filters, and mobile responsive layout.
 - Added quick battery-model creation modal and correct inventory valuation from product purchase rates.
 
+### 2026-02-21 — PSC workflow expansion
+- Renamed the product to PSC and refreshed the UI with a clean blue-and-white theme.
+- Added multi-model movement entry, quick supplier/dealer/warehouse creation with automatic selection, and dealer directory/profile views.
+- Added dealer opening balance plus dispatch totals for outstanding balance, brand/model preference summaries, and dispatch history.
+- Added validation so an empty movement cannot be posted.
+
 ## Prioritized backlog
-- P0: Add quick-add supplier, dealer, brand, and warehouse directly inside stock movement forms.
+- P0: Add quick-add brand directly inside stock movement forms and connect new brands to product creation.
 - P0: Add multi-line transactions so one receipt/dispatch can contain many models.
 - P1: Add returns, damaged/defective buckets, transfers, adjustments, and opening stock.
 - P1: Add dealer and supplier profile pages with movement history.

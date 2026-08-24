@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="0.978" timestamp="2026-08-24T08:38:24.718806+00:00" hostname="agent-env-a3a22c4d-0ef7-46b2-a0b2-6918ced7e029"><testcase classname="tests.test_new_features_api" name="test_quick_master_creation_and_multi_item_transaction_persist" time="0.263"><failure message="assert 400 == 200&#10; +  where 400 = &lt;Response [400]&gt;.status_code">backend/tests/test_new_features_api.py:42: in test_quick_master_creation_and_multi_item_transaction_persist
+    assert transaction.status_code == 200
+E   assert 400 == 200
+E    +  where 400 = &lt;Response [400]&gt;.status_code</failure></testcase><testcase classname="tests.test_new_features_api" name="test_empty_transaction_is_rejected" time="0.237"><failure message="assert 200 == 400&#10; +  where 200 = &lt;Response [200]&gt;.status_code">backend/tests/test_new_features_api.py:62: in test_empty_transaction_is_rejected
+    assert response.status_code == 400
+E   assert 200 == 400
+E    +  where 200 = &lt;Response [200]&gt;.status_code</failure></testcase></testsuite></testsuites>

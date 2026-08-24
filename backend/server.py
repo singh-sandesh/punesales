@@ -12,7 +12,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
-app = FastAPI(title='VoltPulse Stock API')
+app = FastAPI(title='PSC Stock API')
 api = APIRouter(prefix='/api')
 
 class MasterIn(BaseModel):
@@ -41,7 +41,7 @@ class TransactionIn(BaseModel):
     warehouse_id: str
     reference: str = ''
     notes: str = ''
-    items: list[ItemIn]
+    items: list[ItemIn] = Field(min_length=1)
 
 def now(): return datetime.now(timezone.utc).isoformat()
 def clean(doc):
@@ -99,6 +99,23 @@ async def create_master(kind:str, data:MasterIn):
     if kind not in ['brands','suppliers','dealers','warehouses']: raise HTTPException(400,'Unsupported master')
     doc={'id':str(uuid.uuid4()),'name':data.name.strip(),'code':data.code,'active':True,'created_at':now(),**data.details}
     await db[kind].insert_one(doc); return clean(doc)
+
+@api.get('/dealers/{dealer_id}/profile')
+async def dealer_profile(dealer_id: str):
+    dealer = await db.dealers.find_one({'id': dealer_id}, {'_id': 0})
+    if not dealer: raise HTTPException(404, 'Dealer not found')
+    tx = await db.transactions.find({'party_id': dealer_id, 'kind': 'outward'}, {'_id': 0}).sort('created_at', -1).to_list(500)
+    products = {x['id']: x for x in await db.products.find({}, {'_id': 0}).to_list(5000)}
+    brands = {x['id']: x for x in await db.brands.find({}, {'_id': 0}).to_list(5000)}
+    history=[]; brand_counts={}; model_counts={}; total_units=0; total_value=0
+    for t in tx:
+        for item in t.get('items', []):
+            p=products.get(item['product_id'], {}); brand=brands.get(p.get('brand_id'), {}).get('name', 'Unknown'); qty=item['quantity']; value=qty*item.get('rate',0)
+            total_units += qty; total_value += value; brand_counts[brand]=brand_counts.get(brand,0)+qty; model_counts[p.get('name','Unknown')]=model_counts.get(p.get('name','Unknown'),0)+qty
+            history.append({'transaction_id':t['transaction_id'],'date':t['created_at'],'brand':brand,'model':p.get('name','Unknown'),'quantity':qty,'rate':item.get('rate',0),'total':value,'reference':t.get('reference','')})
+    top_brand=max(brand_counts,key=brand_counts.get) if brand_counts else '—'
+    top_model=max(model_counts,key=model_counts.get) if model_counts else '—'
+    return {'dealer':dealer,'summary':{'total_units':total_units,'total_value':total_value,'outstanding':dealer.get('opening_balance',0)+total_value,'top_brand':top_brand,'top_model':top_model,'last_transaction':history[0]['date'] if history else None},'history':history}
 
 @api.post('/products')
 async def create_product(data:ProductIn):
