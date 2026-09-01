@@ -194,3 +194,44 @@ Because `SEED_DEMO_DATA=false`, it comes back with 0 brands, 0 dealers, 0 units.
 ---
 
 That's it — no AWS account, no domain, no monthly bill. Everything runs on your PC, and once built once, it works even with no internet at all.
+
+---
+
+## 10. One-click desktop icon (double-click to launch the app)
+
+You don't have to remember any commands. The project ships with two ready-made scripts:
+
+- `Start-PSC.bat` — starts Docker (if needed), starts the app, opens it in your browser
+- `Stop-PSC.bat` — cleanly shuts everything down
+
+### 10a. Make a desktop shortcut
+
+1. In File Explorer, open your project folder (the one with `docker-compose.yml`).
+2. **Right-click `Start-PSC.bat` → Send to → Desktop (create shortcut)**.
+3. On your desktop you'll see `Start-PSC.bat - Shortcut`. Right-click it → **Rename** → call it `PSC Stock Control`.
+4. (Optional) Repeat for `Stop-PSC.bat` and rename it `Stop PSC`.
+
+Now double-clicking the desktop icon does everything: launches Docker Desktop if it isn't running, waits for it, brings up the containers, and opens `http://localhost` in your browser. A small black console window shows the progress and then closes itself.
+
+### 10b. Give it a nice icon (optional)
+
+1. Right-click the desktop shortcut → **Properties** → **Change Icon…**
+2. Click **Browse…** and pick any `.ico` file. Windows has built-in ones at `C:\Windows\System32\SHELL32.dll` — click it and choose one you like (there's a warehouse/box icon in there).
+3. Click **OK** → **Apply**.
+
+### 10c. Auto-start when Windows boots (optional)
+
+If you want the app to be ready the moment you log in:
+
+1. Press `Win + R`, type `shell:startup`, press Enter. This opens the **Startup** folder.
+2. Copy your `PSC Stock Control` desktop shortcut into that folder.
+3. Right-click the shortcut → **Properties** → in the **Run** dropdown pick **Minimized** (so the console doesn't pop up every login).
+
+Now every time you log in to Windows, the app comes up on its own and is reachable at `http://localhost` (and from other devices on your network via your PC's LAN IP).
+
+### 10d. Pin to Taskbar / Start menu
+
+Windows won't let you pin a `.bat` file directly, but it will let you pin a **shortcut** to one:
+
+1. Right-click the desktop shortcut → **Show more options** (Windows 11) → **Pin to Start** or **Pin to taskbar**.
+2. Done — one click from the taskbar launches everything.
