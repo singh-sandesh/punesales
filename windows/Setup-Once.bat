@@ -121,16 +121,27 @@ goto do_install
 set "YARN=npx --yes yarn@1.22.22"
 
 :do_install
-echo   Running: %YARN% install
-call %YARN% install --network-timeout 600000
+echo   Running: %YARN% install  (output also saved to setup-log.txt)
+echo. >>"%LOG%"
+echo ==== yarn install ==== >>"%LOG%"
+call %YARN% install --network-timeout 600000 >>"%LOG%" 2>&1
 set RC=%ERRORLEVEL%
 echo   yarn install exit code: %RC%
 echo yarn install exit code: %RC% >>"%LOG%"
 if not "%RC%"=="0" goto yarn_install_fail
+if not exist "node_modules\react-scripts" goto no_node_modules
+echo   ok. node_modules created.
 echo.
 echo  Press any key to continue to frontend BUILD...
 pause >nul
 goto step6
+
+:no_node_modules
+echo.
+echo  ERROR: yarn install said it worked but node_modules\react-scripts is missing.
+echo  See %LOG% for details.
+cd /d "%APP_ROOT%"
+goto end
 
 :yarn_install_fail
 echo.
@@ -141,8 +152,10 @@ goto end
 REM ---------- STEP 6: yarn build ----------
 :step6
 echo.
-echo  [6/6] Building frontend (~1-3 min)...
-call %YARN% build
+echo  [6/6] Building frontend (~1-3 min, output also saved to setup-log.txt)...
+echo. >>"%LOG%"
+echo ==== yarn build ==== >>"%LOG%"
+call %YARN% build >>"%LOG%" 2>&1
 set RC=%ERRORLEVEL%
 echo   yarn build exit code: %RC%
 echo yarn build exit code: %RC% >>"%LOG%"
