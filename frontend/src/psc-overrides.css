@@ -13,6 +13,14 @@
 .icon-action:hover{background:var(--blue-soft);border-color:var(--blue)}
 .history-table{overflow:auto}
 .history-table table{min-width:900px}
+.history-range-bar{gap:14px;align-items:flex-end;flex-wrap:wrap}
+.history-range-bar .filter-pills{flex-wrap:wrap}
+.date-range{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.date-range label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.date-range input[type="date"]{padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--text);font:13px Inter;outline:0;transition:.15s}
+.date-range input[type="date"]:focus{border-color:var(--blue);box-shadow:0 0 0 3px #1769e020}
+.range-summary{padding:10px 14px;margin:6px 0 12px;background:var(--blue-soft);border:1px solid #cfe0f4;border-radius:9px;font-size:13px;color:var(--text)}
+.range-summary b{color:var(--blue)}
 
 @media(max-width:1200px){
   .insight-split{grid-template-columns:1fr}

@@ -522,32 +522,70 @@ function Stock({ stock, data }) {
 function History({ rows, onEdit }) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('All');
-  const filtered = rows.filter(r =>
-    (kind === 'All' || r.kind === kind) &&
-    [r.transaction_id, r.party_name, r.reference,
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const dateOf = (r) => r.movement_date || (r.created_at || '').slice(0, 10);
+
+  const setRange = (preset) => {
+    const t = new Date();
+    const iso = (d) => d.toISOString().slice(0, 10);
+    if (preset === 'all') { setFrom(''); setTo(''); return; }
+    if (preset === 'today') { const s = iso(t); setFrom(s); setTo(s); return; }
+    if (preset === 'week') {
+      const day = t.getDay(); // 0 Sun ... 6 Sat
+      const monOffset = (day + 6) % 7; // days back to Monday
+      const start = new Date(t); start.setDate(t.getDate() - monOffset);
+      setFrom(iso(start)); setTo(iso(t)); return;
+    }
+    if (preset === 'month') {
+      const start = new Date(t.getFullYear(), t.getMonth(), 1);
+      setFrom(iso(start)); setTo(iso(t)); return;
+    }
+    if (preset === 'lastMonth') {
+      const start = new Date(t.getFullYear(), t.getMonth() - 1, 1);
+      const end = new Date(t.getFullYear(), t.getMonth(), 0);
+      setFrom(iso(start)); setTo(iso(end)); return;
+    }
+    if (preset === '30d') {
+      const start = new Date(t); start.setDate(t.getDate() - 29);
+      setFrom(iso(start)); setTo(iso(t)); return;
+    }
+  };
+
+  const filtered = rows.filter(r => {
+    if (kind !== 'All' && r.kind !== kind) return false;
+    const d = dateOf(r);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    const hay = [r.transaction_id, r.party_name, r.reference,
       ...(r.items_display || []).map(i => `${i.brand} ${i.product}`)]
-      .join(' ').toLowerCase().includes(q.toLowerCase())
-  );
+      .join(' ').toLowerCase();
+    return hay.includes(q.toLowerCase());
+  });
   const sorted = [...filtered].sort((a, b) => {
-    const da = a.movement_date || (a.created_at || '').slice(0, 10);
-    const db = b.movement_date || (b.created_at || '').slice(0, 10);
+    const da = dateOf(a);
+    const db = dateOf(b);
     if (db !== da) return db.localeCompare(da);
     return (b.created_at || '').localeCompare(a.created_at || '');
   });
   const fmtDate = (d) => {
     if (!d) return '—';
-    // d is YYYY-MM-DD; construct without TZ shift
     const [y, m, day] = d.split('-').map(Number);
     if (!y) return d;
     return new Date(y, (m || 1) - 1, day || 1).toLocaleDateString();
   };
+
+  const totalUnits = sorted.reduce((a, r) => a + (r.total_quantity || 0), 0);
+  const rangeActive = !!(from || to);
+
   return (
     <div className="content">
       <div className="directory-head">
         <div>
           <div className="eyebrow blue">MOVEMENT HISTORY</div>
           <h2>Every movement, clear</h2>
-          <p>Sorted by movement date (newest first). Open any row to correct quantity, items or the date.</p>
+          <p>Sorted by movement date (newest first). Filter by any date range, then open a row to correct it.</p>
         </div>
       </div>
       <div className="toolbar">
@@ -564,6 +602,41 @@ function History({ rows, onEdit }) {
           ))}
         </div>
       </div>
+      <div className="toolbar wraps history-range-bar">
+        <div className="filter-pills" data-testid="history-range-presets">
+          {[['all', 'All time'], ['today', 'Today'], ['week', 'This week'],
+            ['month', 'This month'], ['lastMonth', 'Last month'], ['30d', 'Last 30 days']].map(([k, l]) => (
+            <button key={k} type="button"
+              data-testid={`history-range-${k}`}
+              onClick={() => setRange(k)}>{l}</button>
+          ))}
+        </div>
+        <div className="date-range">
+          <label>From
+            <input type="date" data-testid="history-date-from"
+              value={from} max={to || undefined}
+              onChange={e => setFrom(e.target.value)} />
+          </label>
+          <label>To
+            <input type="date" data-testid="history-date-to"
+              value={to} min={from || undefined}
+              onChange={e => setTo(e.target.value)} />
+          </label>
+          {rangeActive && (
+            <button type="button" className="text-btn"
+              data-testid="history-range-clear"
+              onClick={() => { setFrom(''); setTo(''); }}>
+              Clear range
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="range-summary" data-testid="history-range-summary">
+        Showing <b>{sorted.length}</b> movement{sorted.length !== 1 ? 's' : ''}
+        {rangeActive && (from || to) && (
+          <> from <b>{fmtDate(from) || '…'}</b> to <b>{fmtDate(to) || '…'}</b></>
+        )} — <b>{totalUnits}</b> total units.
+      </div>
       <div className="history-table table-panel">
         <table>
           <thead>
@@ -577,7 +650,7 @@ function History({ rows, onEdit }) {
               <tr key={r.id} data-testid={`history-row-${r.transaction_id}`}>
                 <td>
                   <b data-testid={`history-date-${r.transaction_id}`}>
-                    {fmtDate(r.movement_date || (r.created_at || '').slice(0, 10))}
+                    {fmtDate(dateOf(r))}
                   </b>
                   <small>recorded {new Date(r.created_at).toLocaleString()}</small>
                 </td>
