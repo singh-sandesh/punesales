@@ -61,6 +61,10 @@ async def seed():
     marker = await db.system.find_one({'_id': 'seeded'})
     if marker:
         return
+    if os.environ.get('SEED_DEMO_DATA', 'false').lower() != 'true':
+        # Production / fresh start — no demo data. Just drop the marker so we don't check again.
+        await db.system.insert_one({'_id': 'seeded', 'at': now(), 'mode': 'empty'})
+        return
     brands = [{'id': str(uuid.uuid4()), 'name': n, 'code': c, 'active': True}
               for n, c in [('Exide', 'EXD'), ('Massimo', 'MSM'), ('Microtek', 'MTK')]]
     await db.brands.insert_many(brands)
