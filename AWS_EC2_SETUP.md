@@ -1,38 +1,38 @@
-# Deploying PSC Stock Control on AWS EC2
+# Deploying PSC Stock Control on AWS EC2 — Docker Compose Edition
 
-A step-by-step, copy-and-paste guide to get the app running on a fresh AWS EC2 instance with MongoDB, Nginx, PM2 and HTTPS. Total time: about 30–40 minutes.
+One-file deploy. You run `docker compose up -d` and the app, database, and web server all come up together. About **15 minutes end-to-end**.
 
-The app is a three-part stack:
+The stack:
 
-- **MongoDB 7** — the database (runs on the same EC2 or on MongoDB Atlas)
-- **FastAPI backend** — Python, runs on port `8001`
-- **React frontend** — built once, served as static files by Nginx
+- `mongo` — MongoDB 7 with a named volume for persistence
+- `backend` — FastAPI on port 8001 (internal only, not exposed)
+- `frontend` — Nginx that serves the built React app **and** reverse-proxies `/api/*` to `backend`
+
+Only `frontend` publishes a port on the host (80 → 80). The database and API are on an internal Docker network, invisible from the internet.
 
 ---
 
 ## 1. Launch the EC2 instance
 
-1. Sign in to the AWS Console → **EC2** → **Launch instance**.
+1. AWS Console → **EC2** → **Launch instance**.
 2. **Name**: `psc-stock`
-3. **AMI**: `Ubuntu Server 22.04 LTS` (or 24.04). Architecture: `64-bit (x86)`.
-4. **Instance type**:
-   - `t3.small` (2 vCPU, 2 GB RAM) is enough for a single-user shop.
-   - `t3.medium` if you plan to keep MongoDB on the same box and expect real traffic.
-5. **Key pair**: create or pick one and download the `.pem`. Keep it safe.
-6. **Network settings** → *Edit* → **Security group** — create new with these inbound rules:
-   | Type       | Port | Source          | Purpose                 |
-   | ---------- | ---- | --------------- | ----------------------- |
-   | SSH        | 22   | Your IP only    | Login                   |
-   | HTTP       | 80   | `0.0.0.0/0`     | Nginx / Let's Encrypt   |
-   | HTTPS      | 443  | `0.0.0.0/0`     | Nginx (after SSL)       |
-7. **Storage**: 20 GB `gp3` root volume is plenty.
-8. Click **Launch instance**.
+3. **AMI**: `Ubuntu Server 24.04 LTS` (or 22.04). Architecture: `64-bit (x86)`.
+4. **Instance type**: `t3.small` is plenty for a single shop. Bump to `t3.medium` if you expect heavy usage or want headroom for the DB.
+5. **Key pair**: create or pick one, download the `.pem`.
+6. **Security group** — inbound rules:
 
-Once it's `Running`, copy the **Public IPv4 address**.
+   | Type       | Port | Source          |
+   | ---------- | ---- | --------------- |
+   | SSH        | 22   | Your IP only    |
+   | HTTP       | 80   | `0.0.0.0/0`     |
+   | HTTPS      | 443  | `0.0.0.0/0`     |
+
+7. **Storage**: 20 GB `gp3` root volume.
+8. **Launch instance** → wait for `Running` → copy the **Public IPv4 address**.
 
 ---
 
-## 2. First-time login
+## 2. Log in and install Docker
 
 From your laptop:
 
@@ -41,322 +41,272 @@ chmod 400 ~/Downloads/psc-stock.pem
 ssh -i ~/Downloads/psc-stock.pem ubuntu@<EC2_PUBLIC_IP>
 ```
 
-Update the box:
+On the instance:
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y git curl build-essential nginx ufw
-```
+sudo apt install -y ca-certificates curl gnupg git
 
-Enable the firewall (optional but recommended):
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
-sudo ufw --force enable
-```
-
----
-
-## 3. Install MongoDB 7 (on the same EC2)
-
-> Skip this section if you use **MongoDB Atlas** — jump to Section 4 and just paste your Atlas connection string when creating `backend/.env`.
-
-```bash
-# Add MongoDB signing key + repo
-curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
-  sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
-  https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
-  sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-
+# Official Docker install
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 sudo apt update
-sudo apt install -y mongodb-org
-sudo systemctl enable --now mongod
-sudo systemctl status mongod --no-pager     # should say "active (running)"
-```
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-**Secure MongoDB** with a database user:
-
-```bash
-mongosh
-```
-
-Inside the mongo shell:
-
-```javascript
-use admin
-db.createUser({
-  user: "pscAdmin",
-  pwd:  "CHANGE_ME_STRONG_PASSWORD",
-  roles: [{ role: "root", db: "admin" }]
-})
+# Run docker without sudo
+sudo usermod -aG docker $USER
+# Log out and back in for group change to take effect
 exit
 ```
 
-Turn on authentication:
+Reconnect:
 
 ```bash
-sudo sed -i 's/#security:/security:\n  authorization: enabled/' /etc/mongod.conf
-sudo systemctl restart mongod
-```
-
-Now MongoDB is only accessible with credentials. The connection URL you will use in `backend/.env` is:
-
-```
-mongodb://pscAdmin:CHANGE_ME_STRONG_PASSWORD@127.0.0.1:27017/?authSource=admin
-```
-
-### Storage for the database
-By default MongoDB stores data in `/var/lib/mongodb`, which lives on the root EBS volume. **20 GB is enough for years of stock movements** for a single shop. If you want more headroom later:
-
-1. In AWS Console → EC2 → **Volumes** → your `gp3` root volume → *Modify volume* → change from 20 → 50 GB.
-2. On the instance: `sudo growpart /dev/nvme0n1 1 && sudo resize2fs /dev/nvme0n1p1`.
-
-Automatic backups (recommended): run `mongodump --uri="mongodb://pscAdmin:PASS@127.0.0.1:27017/?authSource=admin" --out /home/ubuntu/backups/$(date +%F)` from cron nightly, then sync `/home/ubuntu/backups` to an S3 bucket with `aws s3 sync` (5 GB S3 free tier is plenty).
-
----
-
-## 4. Install Node.js, Yarn and Python
-
-```bash
-# Node 20 LTS
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-sudo npm install -g yarn pm2
-
-# Python 3.11 + venv
-sudo apt install -y python3 python3-venv python3-pip
-```
-
-Check versions:
-
-```bash
-node -v && yarn -v && python3 -V
+ssh -i ~/Downloads/psc-stock.pem ubuntu@<EC2_PUBLIC_IP>
+docker --version && docker compose version
 ```
 
 ---
 
-## 5. Clone the app
+## 3. Clone the repo and configure
 
 ```bash
 cd /home/ubuntu
 git clone https://github.com/singh-sandesh/punesales.git app
 cd app
+
+# Copy the sample and set your own secrets
+cp .env.example .env
+nano .env
 ```
 
----
+Set at minimum:
 
-## 6. Configure the backend
-
-```bash
-cd /home/ubuntu/app/backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Create `backend/.env`:
-
-```bash
-cat > /home/ubuntu/app/backend/.env <<'EOF'
-MONGO_URL=mongodb://pscAdmin:CHANGE_ME_STRONG_PASSWORD@127.0.0.1:27017/?authSource=admin
+```env
+MONGO_USER=pscAdmin
+MONGO_PASSWORD=<a-long-random-string>
 DB_NAME=psc_stock
-CORS_ORIGINS=https://your-domain.com,https://www.your-domain.com
+CORS_ORIGINS=*
 SEED_DEMO_DATA=false
-EOF
 ```
 
-Notes:
-- `SEED_DEMO_DATA=false` means the app starts **completely empty** — no demo brands, dealers, or units.
-- Set `CORS_ORIGINS` to the final domain(s) the frontend will be served from. During initial testing you can temporarily use `CORS_ORIGINS=*`.
+Save and exit (Ctrl-O, Enter, Ctrl-X).
 
-Test the backend:
+> Tip — generate a strong password: `openssl rand -base64 24`
+
+---
+
+## 4. Bring the stack up
 
 ```bash
-cd /home/ubuntu/app/backend
-source .venv/bin/activate
-uvicorn server:app --host 0.0.0.0 --port 8001
-# Ctrl-C once you see "Uvicorn running on http://0.0.0.0:8001"
+cd /home/ubuntu/app
+docker compose up -d --build
 ```
 
-Now run it as a background service with PM2:
+First build takes 3–5 minutes (pulling images, building React). Subsequent runs are seconds.
+
+Check that everything is healthy:
 
 ```bash
-cd /home/ubuntu/app/backend
-pm2 start "/home/ubuntu/app/backend/.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8001" \
-  --name psc-backend --cwd /home/ubuntu/app/backend
-pm2 save
-pm2 startup systemd -u ubuntu --hp /home/ubuntu
-# Copy-paste the last "sudo env PATH=... pm2 startup" command it prints, and run it.
+docker compose ps
 ```
 
-Verify:
+You should see three containers `Up (healthy)`:
+
+```
+psc-mongo      Up (healthy)
+psc-backend    Up (healthy)
+psc-frontend   Up (healthy)
+```
+
+Test the API from inside the box:
 
 ```bash
-curl http://127.0.0.1:8001/api/bootstrap
-# expected: {"brands":[],"products":[],"suppliers":[],"dealers":[]}
+curl http://localhost/api/bootstrap
+# Expected: {"brands":[],"products":[],"suppliers":[],"dealers":[]}
+```
+
+Now open `http://<EC2_PUBLIC_IP>` in your browser — you'll see the empty PSC dashboard, ready to accept your first brand and first stock-in.
+
+---
+
+## 5. Point your domain
+
+In your DNS provider (Route 53, Cloudflare, GoDaddy…) create an **A record**:
+
+```
+your-domain.com   →   <EC2_PUBLIC_IP>
+www.your-domain.com → <EC2_PUBLIC_IP>
+```
+
+Wait 2–5 minutes, then verify:
+
+```bash
+dig your-domain.com +short
+# should print your EC2 IP
 ```
 
 ---
 
-## 7. Build the frontend
+## 6. HTTPS with Let's Encrypt (recommended)
+
+The cleanest way with Docker is to add a small **Caddy** container as the public reverse proxy — it auto-issues and renews certificates, no manual certbot needed.
+
+Stop the current stack:
 
 ```bash
-cd /home/ubuntu/app/frontend
+cd /home/ubuntu/app
+docker compose down
 ```
 
-Create `frontend/.env` — this URL is baked into the build, so set it to the domain (or public IP for now) that Nginx will serve:
+Move the frontend off port 80 by editing `docker-compose.yml` and change the `frontend` service ports block:
 
-```bash
-cat > /home/ubuntu/app/frontend/.env <<'EOF'
-REACT_APP_BACKEND_URL=https://your-domain.com
-EOF
+```yaml
+  frontend:
+    # ... existing config ...
+    # remove:  ports:
+    #            - "80:80"
+    expose:
+      - "80"
 ```
 
-Install & build:
+Add a Caddy service (append inside `services:`):
 
-```bash
-yarn install
-yarn build
+```yaml
+  caddy:
+    image: caddy:2-alpine
+    container_name: psc-caddy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - psc-net
 ```
 
-The static site is now in `/home/ubuntu/app/frontend/build/`.
+And add these two volumes at the bottom (next to `mongo-data`):
 
----
+```yaml
+volumes:
+  mongo-data:
+  caddy-data:
+  caddy-config:
+```
 
-## 8. Nginx: serve frontend + proxy `/api` to backend
+Create `/home/ubuntu/app/Caddyfile`:
 
-```bash
-sudo tee /etc/nginx/sites-available/psc-stock >/dev/null <<'EOF'
-server {
-    listen 80;
-    server_name your-domain.com www.your-domain.com;
-
-    root /home/ubuntu/app/frontend/build;
-    index index.html;
-
-    # React router — always fall back to index.html
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Forward all API traffic to FastAPI on port 8001
-    location /api/ {
-        proxy_pass         http://127.0.0.1:8001;
-        proxy_http_version 1.1;
-        proxy_set_header   Host              $host;
-        proxy_set_header   X-Real-IP         $remote_addr;
-        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
-        client_max_body_size 20m;
-    }
+```caddy
+your-domain.com, www.your-domain.com {
+    encode gzip zstd
+    reverse_proxy frontend:80
 }
-EOF
-
-sudo ln -sf /etc/nginx/sites-available/psc-stock /etc/nginx/sites-enabled/psc-stock
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t
-sudo systemctl reload nginx
 ```
 
-Open `http://<EC2_PUBLIC_IP>` — you should see the empty PSC dashboard, ready to accept your first brand and first stock-in.
-
----
-
-## 9. Point your domain, then enable HTTPS
-
-1. In your DNS provider (Route 53, GoDaddy, Cloudflare, etc.) create an **A record** for `your-domain.com` → your EC2 public IP.
-2. Wait 2–5 minutes for DNS to propagate (`dig your-domain.com` should resolve to the EC2 IP).
-3. Get a free Let's Encrypt certificate:
+Bring it back up:
 
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
-# Choose "redirect HTTP to HTTPS" when prompted
+docker compose up -d --build
 ```
 
-Certbot auto-renews via a systemd timer — no cron needed.
+Caddy will now automatically fetch a Let's Encrypt cert on first request and auto-renew forever. Visit `https://your-domain.com` — it just works.
 
-Finally, rebuild the frontend so it points at the HTTPS URL:
+---
+
+## 7. Everyday operations
+
+| Task                                 | Command                                                     |
+| ------------------------------------ | ----------------------------------------------------------- |
+| Container status                     | `docker compose ps`                                         |
+| Tail all logs                        | `docker compose logs -f`                                    |
+| Tail backend only                    | `docker compose logs -f backend`                            |
+| Restart just the backend             | `docker compose restart backend`                            |
+| Update code from GitHub              | `git pull && docker compose up -d --build`                  |
+| Stop everything                      | `docker compose down`                                       |
+| Stop **and** delete DB (destructive) | `docker compose down -v`                                    |
+| Open a mongo shell                   | `docker compose exec mongo mongosh -u $MONGO_USER -p`       |
+
+---
+
+## 8. Backups
+
+**Local snapshot** (run any time):
 
 ```bash
-sed -i 's|http://your-domain.com|https://your-domain.com|' /home/ubuntu/app/frontend/.env
-cd /home/ubuntu/app/frontend && yarn build
+docker compose exec -T mongo mongodump \
+  --username "$(grep MONGO_USER /home/ubuntu/app/.env | cut -d= -f2)" \
+  --password "$(grep MONGO_PASSWORD /home/ubuntu/app/.env | cut -d= -f2)" \
+  --authenticationDatabase admin \
+  --archive > ~/psc-$(date +%F).archive
 ```
 
-Reload Nginx once:
+**Restore** from a snapshot:
 
 ```bash
-sudo systemctl reload nginx
+cat ~/psc-2026-02-15.archive | docker compose exec -T mongo mongorestore \
+  --username "..." --password "..." --authenticationDatabase admin --archive --drop
 ```
 
----
+**Nightly S3 upload** — `crontab -e` and add:
 
-## 10. Everyday operations
+```
+0 2 * * * cd /home/ubuntu/app && \
+  docker compose exec -T mongo mongodump \
+    --username pscAdmin --password YOUR_PASSWORD --authenticationDatabase admin --archive \
+  | gzip > /home/ubuntu/psc-$(date +\%F).archive.gz && \
+  aws s3 cp /home/ubuntu/psc-$(date +\%F).archive.gz s3://your-bucket/psc-backups/ && \
+  find /home/ubuntu -maxdepth 1 -name "psc-*.archive.gz" -mtime +14 -delete
+```
 
-| Task                        | Command                                                        |
-| --------------------------- | -------------------------------------------------------------- |
-| See backend logs            | `pm2 logs psc-backend`                                         |
-| Restart backend             | `pm2 restart psc-backend`                                      |
-| Stop backend                | `pm2 stop psc-backend`                                         |
-| Update to latest code       | `cd /home/ubuntu/app && git pull`                              |
-| Rebuild frontend            | `cd /home/ubuntu/app/frontend && yarn build && sudo systemctl reload nginx` |
-| Restart backend after pull  | `pm2 restart psc-backend`                                      |
-| Backup DB now               | `mongodump --uri="mongodb://pscAdmin:PASS@127.0.0.1:27017/?authSource=admin" --out ~/backups/$(date +%F)` |
-| Restore DB                  | `mongorestore --uri="…" --drop ~/backups/<folder>`             |
+Install AWS CLI first: `sudo apt install -y awscli && aws configure`.
 
 ---
 
-## 11. Daily backup to S3 (optional but strongly recommended)
+## 9. Troubleshooting
+
+- **`docker compose ps` shows a container `unhealthy` or restarting** → `docker compose logs <service>`.
+- **`Bad Gateway` when opening the site** → backend container not up: `docker compose logs backend`.
+- **Login page never loads** → check `docker compose logs frontend` for build errors.
+- **CORS error in browser console** → set `CORS_ORIGINS=https://your-domain.com` in `.env`, then `docker compose up -d`.
+- **Ran out of disk** → `docker system prune -a --volumes` frees old images and dangling data (**this deletes anonymous volumes — the named `mongo-data` volume is safe**).
+- **Forgot the mongo password** → it's in your `/home/ubuntu/app/.env` file.
+
+---
+
+## 10. Cost sketch
+
+| Item                     | Approx / month |
+| ------------------------ | -------------- |
+| EC2 `t3.small` on-demand | $15            |
+| 20 GB gp3 EBS            | $2             |
+| Route 53 hosted zone     | $0.50          |
+| S3 backups (< 1 GB)      | $0.03          |
+| **Total**                | **≈ $18**      |
+
+Reserve the instance for 1 year to bring EC2 down to about $9/mo.
+
+---
+
+## 11. Wiping the app back to a fresh state
 
 ```bash
-sudo apt install -y awscli
-aws configure                # paste an IAM user access key that has s3:PutObject on your bucket
-
-cat > /home/ubuntu/backup.sh <<'EOF'
-#!/bin/bash
-DATE=$(date +%F)
-DIR=/home/ubuntu/backups/$DATE
-mkdir -p "$DIR"
-mongodump --uri="mongodb://pscAdmin:CHANGE_ME_STRONG_PASSWORD@127.0.0.1:27017/?authSource=admin" --out "$DIR"
-tar -czf "$DIR.tar.gz" -C /home/ubuntu/backups "$DATE"
-aws s3 cp "$DIR.tar.gz" s3://your-bucket/psc-backups/
-find /home/ubuntu/backups -mtime +7 -delete
-EOF
-chmod +x /home/ubuntu/backup.sh
-
-crontab -e
-# add this line, save & exit:
-0 2 * * * /home/ubuntu/backup.sh >> /home/ubuntu/backup.log 2>&1
+cd /home/ubuntu/app
+docker compose down -v      # -v also drops the mongo-data volume
+docker compose up -d --build
 ```
 
-Now the DB is dumped every night at 2 AM, gzipped, pushed to S3, and locally kept for a week.
+Because `SEED_DEMO_DATA=false`, the app comes back completely empty — 0 brands, 0 dealers, 0 units — ready for your first real record.
 
 ---
 
-## 12. Troubleshooting
-
-- **`curl /api/bootstrap` hangs** → backend isn't running: `pm2 logs psc-backend`.
-- **Frontend loads but data doesn't** → the value in `frontend/.env` (`REACT_APP_BACKEND_URL`) doesn't match the domain. Fix it and re-run `yarn build`.
-- **CORS error in the browser console** → add your domain to `CORS_ORIGINS` in `backend/.env`, then `pm2 restart psc-backend`.
-- **MongoDB won't start** → `sudo journalctl -u mongod -n 50`.
-- **Nginx 502 Bad Gateway** → backend is down or listening on the wrong port. Check `pm2 status`.
-
----
-
-## 13. Cost sketch
-
-| Item                            | Approx / month |
-| ------------------------------- | -------------- |
-| EC2 `t3.small` on-demand        | $15            |
-| 20 GB gp3 EBS                   | $2             |
-| Route 53 hosted zone            | $0.50          |
-| S3 backups (<1 GB)              | $0.03          |
-| **Total**                       | **≈ $18**      |
-
-You can drop to $10/mo with a 1-year Reserved Instance, or move MongoDB to Atlas Free Tier and downsize to `t3.micro` for about $8/mo.
-
----
-
-That's it — your PSC Stock Control is live on your own domain, with automated backups and HTTPS, and starts completely empty so you begin fresh from your first brand and first stock-in.
+That's the whole thing. One `.env` file, one `docker compose up -d --build`, one Nginx port on the host, everything else on an isolated internal network.
