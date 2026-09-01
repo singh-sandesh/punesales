@@ -38,6 +38,8 @@ Stock control app for a battery/inverter/trolley shop (React + FastAPI + MongoDB
 - Restored missing `.env` files; removed dead lucide imports that were failing the build.
 - Deployment doc: `/app/AWS_EC2_SETUP.md` (EC2 + MongoDB + Nginx + PM2 + HTTPS + S3 backups).
 - Pytest suite added at `/app/backend/tests/test_stock_flow.py` (15/15 pass).
+- Full Dockerization: `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile` + `nginx.conf`, `.env.example`.
+- Local offline deployment doc: `/app/LOCAL_WINDOWS_SETUP.md` (Docker Desktop on Windows, localhost + LAN access via firewall rule, works fully offline after first build).
 
 ## Verification
 Testing agent iteration_7: **100% backend (15/15), 100% frontend flows**. No open issues.
