@@ -1,4 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -398,6 +400,27 @@ app.include_router(api)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
                    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
                    allow_methods=['*'], allow_headers=['*'])
+
+
+# ---- Serve the built React app (only when frontend/build exists) ----
+# In dev (this sandbox) the folder isn't there, so nothing changes.
+# In the local Windows install, `npm run build` produces it and FastAPI
+# serves the whole app on a single port — no separate web server needed.
+_FRONTEND_BUILD = Path(
+    os.environ.get('FRONTEND_BUILD_DIR')
+    or (ROOT_DIR.parent / 'frontend' / 'build')
+)
+if _FRONTEND_BUILD.is_dir():
+    app.mount('/static', StaticFiles(directory=_FRONTEND_BUILD / 'static'), name='static')
+
+    @app.get('/{full_path:path}')
+    async def spa(full_path: str):
+        # Anything not under /api falls back to the React index.html so
+        # client-side routes keep working on refresh.
+        candidate = _FRONTEND_BUILD / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_FRONTEND_BUILD / 'index.html')
 
 
 @app.on_event('shutdown')
