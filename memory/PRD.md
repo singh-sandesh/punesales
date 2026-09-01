@@ -1,28 +1,39 @@
-# PSC Stock Control — Product Doc
+# PSC Stock Control — PRD
 
-## Problem Statement (original)
-Production-ready web app for an inverter battery distributor. Must be traceable end-to-end: what came in, from whom, when, which brand/model, how many, where it went, which dealer received it, how much remains. Later scoped down by user to a no-login single-location admin dashboard focused on speed and traceability.
+## Original problem statement
+Add a user-selectable date for when stock came in and went out, and organize the History section by that date.
 
-## Users
-- Owner/Admin (self) — main daily user, records movements, checks stock, plans reorders.
+## Core requirements
+1. "Stock In" and "Stock Out" forms include a date picker for the movement date.
+2. Selected date is persisted to the database on each transaction.
+3. History view is sorted by movement date (newest first), showing the movement date as the primary date and the recorded timestamp as a subtitle.
 
-## Latest scope (Iteration 4, Feb 2026)
-- Single-location model, no login, no money/cost display.
-- Product types: Battery, Inverter, Trolley.
-- Cart-style transaction UX (multi-item stock in/out).
-- Full traceability via ledger + editable transactions with audit trail and delta-based recalculation.
+## Architecture
+- Backend: FastAPI (`/app/backend/server.py`), MongoDB (`transactions` collection).
+- Frontend: React (`/app/frontend/src/App.js`).
 
-## Implemented so far
-- Backend (FastAPI + Motor/MongoDB): /api/bootstrap, /api/stock, /api/dashboard, /api/ledger, /api/masters/{kind}, /api/products (POST/DELETE), /api/transactions (POST/PUT with delta math), /api/dealers/{id}/profile, /api/suppliers/{id}/profile, /api/admin/reset. Seed marker in db.system so reset stays reset.
-- Frontend (React): Dashboard (big Stock In/Out, clickable analytics cards, What to order next + Top movers, expandable brand cards, recent activity), Current Stock with search + brand/type/status filters, History with search + kind filter, Dealers directory with search, Suppliers directory with search, Brands with drill-in per brand + add/delete products, Settings with reset, cart-style transaction modal (no quick-add clutter), Sidebar collapse (desktop) + mobile hamburger overlay.
+## Data model changes
+`transactions` document now includes:
+- `movement_date` (string, `YYYY-MM-DD`, user-selected; defaults to today if omitted).
+- `created_at` (existing ISO timestamp of when the record was logged).
 
-## Backlog (P1)
-- Dealer/supplier detail: exportable ledger (PDF/Excel).
-- Attach documents (invoice PDFs) to a movement.
-- Auto-suggest reorder quantities per product beyond the current heuristic.
-- Simple payments tracking (invoice amount, paid, due date) once user asks for it.
+## API changes
+- `POST /api/transactions` and `PUT /api/transactions/{id}` accept optional `movement_date`.
+- `GET /api/ledger` returns `movement_date` and sorts by `(movement_date, created_at)` desc; older records without `movement_date` fall back to `created_at[:10]`.
+- Party profile endpoints surface `movement_date` as the `date` field in history and sort by it.
+
+## Frontend changes
+- `TransactionModal` (Stock In/Out) has a required date input, defaulted to today or the editing record's date.
+- `History` displays movement date as the primary cell and "recorded ..." timestamp as a subtitle; sorted client-side by movement date desc as well.
+
+## Implemented (Feb 2026)
+- Movement date field on Stock In / Stock Out modals.
+- Persistence in Mongo.
+- Sorted History by movement date desc.
+- Restored missing `/app/backend/.env` and `/app/frontend/.env` files.
+- Removed unused lucide-react imports (`Battery`, `XCircle`) that broke the frontend build.
 
 ## Backlog (P2)
-- Serial-number tracking for warranty-critical batteries.
-- Returns management (dealer / supplier / damaged / defective bins).
-- Multi-user access with roles.
+- Date range filter on the History page (from / to).
+- Export History to CSV.
+- Show movement date on Dashboard's "Latest movements" widget.

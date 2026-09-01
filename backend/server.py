@@ -43,6 +43,7 @@ class TransactionIn(BaseModel):
     party_id: Optional[str] = None
     reference: str = ''
     notes: str = ''
+    movement_date: Optional[str] = None  # YYYY-MM-DD picked by user
     items: list[ItemIn] = Field(min_length=1)
 
 
@@ -279,6 +280,7 @@ async def create_transaction(data: TransactionIn):
            'party_id': data.party_id, 'reference': data.reference, 'notes': data.notes,
            'items': [x.model_dump() for x in data.items],
            'total_quantity': sum(x.quantity for x in data.items),
+           'movement_date': data.movement_date or now()[:10],
            'created_at': now(), 'status': 'posted', 'edit_history': []}
     await db.transactions.insert_one(doc)
     for item in doc['items']:
@@ -309,6 +311,7 @@ async def edit_transaction(transaction_id: str, data: TransactionIn):
                'reference': data.reference, 'notes': data.notes,
                'items': new_items,
                'total_quantity': sum(x['quantity'] for x in new_items),
+               'movement_date': data.movement_date or old.get('movement_date') or old.get('created_at', now())[:10],
                'updated_at': now(), 'edit_history': history}
     await db.transactions.replace_one({'transaction_id': transaction_id}, updated)
     for item in new_items:
@@ -318,7 +321,7 @@ async def edit_transaction(transaction_id: str, data: TransactionIn):
 
 @api.get('/ledger')
 async def ledger():
-    tx = await db.transactions.find({}, {'_id': 0}).sort('created_at', -1).to_list(500)
+    tx = await db.transactions.find({}, {'_id': 0}).to_list(500)
     dealers = {x['id']: x for x in await db.dealers.find({}, {'_id': 0}).to_list(2000)}
     suppliers = {x['id']: x for x in await db.suppliers.find({}, {'_id': 0}).to_list(2000)}
     products = {x['id']: x for x in await db.products.find({}, {'_id': 0}).to_list(5000)}
@@ -326,12 +329,14 @@ async def ledger():
     for row in tx:
         parties = dealers if row['kind'] == 'outward' else suppliers
         row['party_name'] = parties.get(row.get('party_id'), {}).get('name', '—')
+        row['movement_date'] = row.get('movement_date') or (row.get('created_at', '')[:10])
         row['items_display'] = [{
             'product': products.get(i['product_id'], {}).get('name', 'Unknown'),
             'brand': brands.get(products.get(i['product_id'], {}).get('brand_id'), {}).get('name', ''),
             'product_type': products.get(i['product_id'], {}).get('product_type', 'battery'),
             'quantity': i['quantity'],
         } for i in row.get('items', [])]
+    tx.sort(key=lambda r: (r.get('movement_date', ''), r.get('created_at', '')), reverse=True)
     return tx
 
 
@@ -349,7 +354,8 @@ async def _party_profile(party_id: str, collection: str, kind: str):
     party = await db[collection].find_one({'id': party_id}, {'_id': 0})
     if not party:
         raise HTTPException(404, f'{collection[:-1]} not found')
-    tx = await db.transactions.find({'party_id': party_id, 'kind': kind}, {'_id': 0}).sort('created_at', -1).to_list(500)
+    tx = await db.transactions.find({'party_id': party_id, 'kind': kind}, {'_id': 0}).to_list(500)
+    tx.sort(key=lambda r: (r.get('movement_date') or (r.get('created_at', '')[:10]), r.get('created_at', '')), reverse=True)
     products = {x['id']: x for x in await db.products.find({}, {'_id': 0}).to_list(5000)}
     brands = {x['id']: x for x in await db.brands.find({}, {'_id': 0}).to_list(2000)}
     history = []
@@ -363,7 +369,7 @@ async def _party_profile(party_id: str, collection: str, kind: str):
             total_units += qty
             counts[brand] = counts.get(brand, 0) + qty
             history.append({'transaction_id': t['transaction_id'],
-                            'date': t['created_at'],
+                            'date': t.get('movement_date') or (t.get('created_at', '')[:10]),
                             'brand': brand,
                             'model': p.get('name', 'Unknown'),
                             'product_type': p.get('product_type', 'battery'),

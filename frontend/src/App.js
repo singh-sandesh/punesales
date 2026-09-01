@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import {
-  Activity, ArrowDownToLine, ArrowUpFromLine, Battery, BatteryCharging, Boxes,
+  Activity, ArrowDownToLine, ArrowUpFromLine, BatteryCharging, Boxes,
   ChevronRight, ChevronLeft, ChevronDown, Edit3, LayoutDashboard, Plus, Search,
   Users, X, Trash2, Zap, Package, CheckCircle2, Minus,
-  Menu, PanelLeftClose, Truck, XCircle
+  Menu, PanelLeftClose, Truck
 } from 'lucide-react';
 import '@/App.css';
 import '@/responsive.css';
@@ -528,13 +528,26 @@ function History({ rows, onEdit }) {
       ...(r.items_display || []).map(i => `${i.brand} ${i.product}`)]
       .join(' ').toLowerCase().includes(q.toLowerCase())
   );
+  const sorted = [...filtered].sort((a, b) => {
+    const da = a.movement_date || (a.created_at || '').slice(0, 10);
+    const db = b.movement_date || (b.created_at || '').slice(0, 10);
+    if (db !== da) return db.localeCompare(da);
+    return (b.created_at || '').localeCompare(a.created_at || '');
+  });
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    // d is YYYY-MM-DD; construct without TZ shift
+    const [y, m, day] = d.split('-').map(Number);
+    if (!y) return d;
+    return new Date(y, (m || 1) - 1, day || 1).toLocaleDateString();
+  };
   return (
     <div className="content">
       <div className="directory-head">
         <div>
           <div className="eyebrow blue">MOVEMENT HISTORY</div>
           <h2>Every movement, clear</h2>
-          <p>Newest activity first. Open any row to correct quantity or items.</p>
+          <p>Sorted by movement date (newest first). Open any row to correct quantity, items or the date.</p>
         </div>
       </div>
       <div className="toolbar">
@@ -555,16 +568,18 @@ function History({ rows, onEdit }) {
         <table>
           <thead>
             <tr>
-              <th>Date &amp; time</th><th>Movement</th><th>Dealer / supplier</th>
+              <th>Movement date</th><th>Movement</th><th>Dealer / supplier</th>
               <th>Items</th><th>Qty</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map(r => (
+            {sorted.map(r => (
               <tr key={r.id} data-testid={`history-row-${r.transaction_id}`}>
                 <td>
-                  <b>{new Date(r.created_at).toLocaleDateString()}</b>
-                  <small>{new Date(r.created_at).toLocaleTimeString()}</small>
+                  <b data-testid={`history-date-${r.transaction_id}`}>
+                    {fmtDate(r.movement_date || (r.created_at || '').slice(0, 10))}
+                  </b>
+                  <small>recorded {new Date(r.created_at).toLocaleString()}</small>
                 </td>
                 <td><span className={`type ${r.kind}`}>
                   {r.kind === 'inward' ? 'IN' : 'OUT'} · {r.transaction_id}
@@ -590,7 +605,7 @@ function History({ rows, onEdit }) {
                 </td>
               </tr>
             ))}
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <tr><td colSpan="6" className="empty">No movements match.</td></tr>
             )}
           </tbody>
@@ -851,10 +866,12 @@ function MasterModal({ kind, presetBrandId, onClose, onSaved }) {
 
 /* ================== TRANSACTION MODAL (cart) ================== */
 function TransactionModal({ type, data, editing, onClose, onSaved }) {
+  const today = new Date().toISOString().slice(0, 10);
   const [f, setF] = useState({
     party_id: editing?.party_id || '',
     reference: editing?.reference || '',
     notes: editing?.notes || '',
+    movement_date: editing?.movement_date || (editing?.created_at ? editing.created_at.slice(0, 10) : today),
   });
   const initial = editing?.items?.map(x => ({ product_id: x.product_id, quantity: x.quantity }))
     || [];
@@ -901,6 +918,7 @@ function TransactionModal({ type, data, editing, onClose, onSaved }) {
       party_id: f.party_id || null,
       reference: f.reference,
       notes: f.notes,
+      movement_date: f.movement_date || null,
       items,
     };
     try {
@@ -934,6 +952,12 @@ function TransactionModal({ type, data, editing, onClose, onSaved }) {
                 onChange={id => setF({ ...f, party_id: id })}
                 placeholder={`Search ${type === 'inward' ? 'supplier' : 'dealer'}`}
                 testId="transaction-party-search" label={partyKey} />
+            </label>
+            <label>{type === 'inward' ? 'Date received' : 'Date dispatched'}
+              <input data-testid="transaction-date-input" type="date" required
+                value={f.movement_date}
+                max={today}
+                onChange={e => setF({ ...f, movement_date: e.target.value })} />
             </label>
             <label>Reference / invoice
               <input value={f.reference}
