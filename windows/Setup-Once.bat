@@ -1,136 +1,172 @@
 @echo off
 title PSC Stock Control - First-time setup
-echo.
-echo  [ Setup-Once starting... ]
-echo.
-
-REM ==============================================================
-REM  Run this ONCE after you install Python, Node.js and MongoDB.
-REM ==============================================================
-
 cd /d "%~dp0\.."
 set "APP_ROOT=%CD%"
+set "LOG=%APP_ROOT%\setup-log.txt"
 
-echo  Project folder: %APP_ROOT%
+REM Fresh log
+> "%LOG%" echo === PSC Setup log - %DATE% %TIME% ===
+>>"%LOG%" echo APP_ROOT=%APP_ROOT%
+
 echo.
-echo  Press any key to begin the checks...
+echo  =====================================================
+echo    PSC Stock Control - First-time setup
+echo    A full log is being written to:
+echo    %LOG%
+echo  =====================================================
+echo.
+echo  If anything goes wrong, send me that file.
+echo.
+echo  Press any key to begin...
 pause >nul
 
-REM --- 1. Check Python ---
+REM ---------- STEP 1: Python ----------
 echo.
 echo  [1/6] Checking Python...
-where python >nul 2>&1
-if errorlevel 1 (
-    echo  ERROR: Python is not installed or not in PATH.
-    echo  Install Python 3.11+ from https://www.python.org/downloads/windows/
-    echo  During install, tick "Add python.exe to PATH".
-    goto :end
-)
+where python >>"%LOG%" 2>&1
+if errorlevel 1 goto no_python
 python --version
+python --version >>"%LOG%" 2>&1
+echo   ok.
+echo.
+echo  Press any key to continue to Node check...
+pause >nul
+goto step2
 
-REM --- 2. Check Node ---
+:no_python
+echo  ERROR: Python is not in PATH.
+echo  Install Python 3.11+ from https://www.python.org/downloads/windows/
+echo  and TICK "Add python.exe to PATH".
+goto end
+
+REM ---------- STEP 2: Node ----------
+:step2
 echo.
 echo  [2/6] Checking Node.js...
-where node >nul 2>&1
-if errorlevel 1 (
-    echo  ERROR: Node.js is not installed or not in PATH.
-    echo  Install Node.js LTS from https://nodejs.org/en/download
-    goto :end
-)
+where node >>"%LOG%" 2>&1
+if errorlevel 1 goto no_node
 node --version
-
-REM --- 3. Check Mongo ---
+node --version >>"%LOG%" 2>&1
+echo   ok.
 echo.
-echo  [3/6] Checking MongoDB...
-where mongod >nul 2>&1
-if errorlevel 1 (
-    echo  WARNING: mongod not found in PATH (fine if it is running as a Windows Service).
-) else (
-    echo  mongod found.
-)
+echo  Press any key to continue to backend setup...
+pause >nul
+goto step3
 
-REM --- 4. Create backend virtual environment ---
+:no_node
+echo  ERROR: Node.js is not in PATH.
+echo  Install Node.js LTS from https://nodejs.org/en/download
+goto end
+
+REM ---------- STEP 3: Backend venv + pip ----------
+:step3
 echo.
-echo  [4/6] Preparing Python virtual environment...
-if not exist "backend\.venv" (
-    echo  Creating Python virtual environment...
-    python -m venv backend\.venv
-    if errorlevel 1 (
-        echo  ERROR: Failed to create venv.
-        goto :end
-    )
-)
+echo  [3/6] Backend virtual environment ^& pip install...
+if exist "backend\.venv\Scripts\python.exe" goto pip_install
+echo   Creating venv...
+python -m venv "backend\.venv" >>"%LOG%" 2>&1
+if errorlevel 1 goto venv_fail
 
-echo  Installing backend Python packages ^(~2 minutes first time^)...
+:pip_install
 call "backend\.venv\Scripts\activate.bat"
-python -m pip install --upgrade pip
-pip install -r "backend\requirements.txt"
-if errorlevel 1 (
-    echo  ERROR: Python package install failed. See message above.
-    goto :end
-)
-
-REM --- 5. Ensure .env files ---
+echo   Upgrading pip...
+python -m pip install --upgrade pip >>"%LOG%" 2>&1
+echo   Installing backend requirements (may take ~2 min)...
+pip install -r "backend\requirements.txt" >>"%LOG%" 2>&1
+if errorlevel 1 goto pip_fail
+echo   ok.
 echo.
-echo  [5/6] Ensuring .env files exist...
-if not exist "backend\.env" (
-    > "backend\.env" echo MONGO_URL=mongodb://localhost:27017
-    >>"backend\.env" echo DB_NAME=psc_stock
-    >>"backend\.env" echo CORS_ORIGINS=*
-    >>"backend\.env" echo SEED_DEMO_DATA=false
-)
+echo  Press any key to continue to .env files...
+pause >nul
+goto step4
+
+:venv_fail
+echo  ERROR: could not create venv. See %LOG%.
+goto end
+
+:pip_fail
+echo  ERROR: pip install failed. See %LOG%.
+goto end
+
+REM ---------- STEP 4: .env files ----------
+:step4
+echo.
+echo  [4/6] Writing .env files...
+if exist "backend\.env" goto env_frontend
+> "backend\.env" echo MONGO_URL=mongodb://localhost:27017
+>>"backend\.env" echo DB_NAME=psc_stock
+>>"backend\.env" echo CORS_ORIGINS=*
+>>"backend\.env" echo SEED_DEMO_DATA=false
+
+:env_frontend
 > "frontend\.env" echo REACT_APP_BACKEND_URL=
-
-REM --- 6. Frontend install + build via YARN (project requires it) ---
+echo   ok.
 echo.
-echo  [6/6] Installing frontend packages with YARN ^(~3-5 minutes first time^)...
-pushd frontend
+echo  Press any key to continue to frontend install...
+pause >nul
+goto step5
 
-REM Prefer yarn if available, otherwise fall back to npx yarn (bundled with Node)
+REM ---------- STEP 5: yarn install ----------
+:step5
+echo.
+echo  [5/6] Frontend install with YARN (this is the slow step, be patient)...
+cd /d "%APP_ROOT%\frontend"
+echo   Working dir now: %CD%
 where yarn >nul 2>&1
-if errorlevel 1 (
-    echo  Using: npx --yes yarn
-    set "YARN=npx --yes yarn@1.22.22"
-) else (
-    echo  Using: yarn (found on PATH)
-    set "YARN=yarn"
-)
+if errorlevel 1 goto use_npx_yarn
+set "YARN=yarn"
+goto do_install
 
-echo.
-echo  ---- yarn install ----
+:use_npx_yarn
+set "YARN=npx --yes yarn@1.22.22"
+
+:do_install
+echo   Running: %YARN% install
 call %YARN% install --network-timeout 600000
-if errorlevel 1 (
-    echo.
-    echo  ERROR: yarn install failed. Scroll up and read the red text.
-    popd
-    goto :end
-)
-
+set RC=%ERRORLEVEL%
+echo   yarn install exit code: %RC%
+echo yarn install exit code: %RC% >>"%LOG%"
+if not "%RC%"=="0" goto yarn_install_fail
 echo.
-echo  ---- yarn build ----
+echo  Press any key to continue to frontend BUILD...
+pause >nul
+goto step6
+
+:yarn_install_fail
+echo.
+echo  ERROR: yarn install failed. Scroll up for the error, or see %LOG%.
+cd /d "%APP_ROOT%"
+goto end
+
+REM ---------- STEP 6: yarn build ----------
+:step6
+echo.
+echo  [6/6] Building frontend (~1-3 min)...
 call %YARN% build
-if errorlevel 1 (
-    echo.
-    echo  ERROR: yarn build failed. Scroll up and read the red text.
-    popd
-    goto :end
-)
-popd
-
-if not exist "frontend\build\index.html" (
-    echo.
-    echo  ERROR: build finished but frontend\build\index.html is missing.
-    goto :end
-)
+set RC=%ERRORLEVEL%
+echo   yarn build exit code: %RC%
+echo yarn build exit code: %RC% >>"%LOG%"
+cd /d "%APP_ROOT%"
+if not "%RC%"=="0" goto build_fail
+if not exist "frontend\build\index.html" goto build_missing
 
 echo.
-echo  ============================================
-echo    Setup complete.
-echo    frontend\build\index.html was created.
+echo  =====================================================
+echo    SUCCESS. frontend\build\index.html created.
 echo    You can now double-click  Start-PSC.bat
-echo  ============================================
+echo  =====================================================
+goto end
+
+:build_fail
+echo  ERROR: yarn build failed. Scroll up or see %LOG%.
+goto end
+
+:build_missing
+echo  ERROR: build finished but frontend\build\index.html is missing.
+goto end
 
 :end
 echo.
-echo  ---- Script finished. Press any key to close this window. ----
+echo  ---- Script finished. Log saved to %LOG% ----
+echo  ---- Press any key to close this window. ----
 pause >nul
