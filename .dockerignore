@@ -1,0 +1,14 @@
+**/.git
+**/.venv
+**/node_modules
+**/build
+**/dist
+**/__pycache__
+**/*.pyc
+frontend/.env
+backend/.env
+windows/
+.emergent/
+*.md
+!README.md
+setup-log.txt
