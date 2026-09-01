@@ -1,36 +1,29 @@
 @echo off
-setlocal
 title PSC Stock Control
-
-REM ==============================================================
-REM  Double-click this file to start the app.
-REM  It launches the Python backend (which also serves the React
-REM  frontend on the same port) and opens the browser.
-REM ==============================================================
+echo.
+echo  [ Start-PSC starting... ]
+echo.
 
 cd /d "%~dp0\.."
 set "APP_ROOT=%CD%"
-
-REM Port the app listens on. Change here if 8000 is taken.
 set "PSC_PORT=8000"
 
+echo  Project folder: %APP_ROOT%
+echo  Target port:    %PSC_PORT%
 echo.
-echo  Starting PSC Stock Control on http://localhost:%PSC_PORT% ...
 
 REM --- Sanity: venv present? ---
 if not exist "backend\.venv\Scripts\python.exe" (
     echo  ERROR: backend virtual environment missing.
     echo  Run  windows\Setup-Once.bat  first.
-    pause
-    exit /b 1
+    goto :end
 )
 
 REM --- Sanity: frontend built? ---
 if not exist "frontend\build\index.html" (
     echo  ERROR: frontend build missing.
     echo  Run  windows\Setup-Once.bat  first.
-    pause
-    exit /b 1
+    goto :end
 )
 
 REM --- Kill any old instance quietly ---
@@ -38,10 +31,8 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":%PSC_PORT% " ^| findstr LIS
     taskkill /PID %%p /F >nul 2>&1
 )
 
-REM --- Start uvicorn in a hidden background window ---
-start "PSC-Backend" /min "backend\.venv\Scripts\python.exe" -m uvicorn server:app ^
-    --app-dir "%APP_ROOT%\backend" ^
-    --host 0.0.0.0 --port %PSC_PORT%
+echo  Starting backend on http://localhost:%PSC_PORT% ...
+start "PSC-Backend" /min "%APP_ROOT%\backend\.venv\Scripts\python.exe" -m uvicorn server:app --app-dir "%APP_ROOT%\backend" --host 0.0.0.0 --port %PSC_PORT%
 
 REM --- Wait for it to be reachable ---
 set /a tries=0
@@ -51,8 +42,7 @@ powershell -NoProfile -Command "try { $r = Invoke-WebRequest -UseBasicParsing -U
 if not errorlevel 1 goto ready
 if %tries% GEQ 20 (
     echo  App did not respond in 20 seconds. Check the PSC-Backend window.
-    pause
-    exit /b 1
+    goto :end
 )
 timeout /t 1 /nobreak >nul
 goto waitloop
@@ -69,7 +59,8 @@ echo    (find YOUR-PC-IP by running: ipconfig)
 echo.
 echo    To stop, run:  Stop-PSC.bat
 echo  ============================================
+
+:end
 echo.
-timeout /t 5 /nobreak >nul
-endlocal
-exit /b 0
+echo  ---- Press any key to close this window. ----
+pause >nul
