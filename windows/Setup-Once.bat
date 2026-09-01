@@ -6,9 +6,6 @@ echo.
 
 REM ==============================================================
 REM  Run this ONCE after you install Python, Node.js and MongoDB.
-REM  It installs backend Python packages, installs frontend
-REM  packages, and builds the frontend into /frontend/build so the
-REM  app is served by a single Python process later.
 REM ==============================================================
 
 cd /d "%~dp0\.."
@@ -16,7 +13,6 @@ set "APP_ROOT=%CD%"
 
 echo  Project folder: %APP_ROOT%
 echo.
-echo  If you can read this line, the script is running fine.
 echo  Press any key to begin the checks...
 pause >nul
 
@@ -48,8 +44,7 @@ echo.
 echo  [3/6] Checking MongoDB...
 where mongod >nul 2>&1
 if errorlevel 1 (
-    echo  WARNING: mongod not found in PATH.
-    echo  Make sure MongoDB Community Server is installed.
+    echo  WARNING: mongod not found in PATH (fine if it is running as a Windows Service).
 ) else (
     echo  mongod found.
 )
@@ -66,7 +61,7 @@ if not exist "backend\.venv" (
     )
 )
 
-echo  Installing backend Python packages ^(this takes ~2 minutes the first time^)...
+echo  Installing backend Python packages ^(~2 minutes first time^)...
 call "backend\.venv\Scripts\activate.bat"
 python -m pip install --upgrade pip
 pip install -r "backend\requirements.txt"
@@ -75,11 +70,10 @@ if errorlevel 1 (
     goto :end
 )
 
-REM --- 5. Make sure backend .env exists ---
+REM --- 5. Ensure .env files ---
 echo.
-echo  [5/6] Ensuring backend .env exists...
+echo  [5/6] Ensuring .env files exist...
 if not exist "backend\.env" (
-    echo  Creating backend\.env with defaults
     > "backend\.env" echo MONGO_URL=mongodb://localhost:27017
     >>"backend\.env" echo DB_NAME=psc_stock
     >>"backend\.env" echo CORS_ORIGINS=*
@@ -87,29 +81,52 @@ if not exist "backend\.env" (
 )
 > "frontend\.env" echo REACT_APP_BACKEND_URL=
 
-REM --- 6. Frontend install + build ---
+REM --- 6. Frontend install + build via YARN (project requires it) ---
 echo.
-echo  [6/6] Installing frontend packages ^(this takes ~3-5 minutes the first time^)...
+echo  [6/6] Installing frontend packages with YARN ^(~3-5 minutes first time^)...
 pushd frontend
-call npm install --legacy-peer-deps
+
+REM Prefer yarn if available, otherwise fall back to npx yarn (bundled with Node)
+where yarn >nul 2>&1
 if errorlevel 1 (
-    echo  ERROR: npm install failed.
+    echo  Using: npx --yes yarn
+    set "YARN=npx --yes yarn@1.22.22"
+) else (
+    echo  Using: yarn (found on PATH)
+    set "YARN=yarn"
+)
+
+echo.
+echo  ---- yarn install ----
+call %YARN% install --network-timeout 600000
+if errorlevel 1 (
+    echo.
+    echo  ERROR: yarn install failed. Scroll up and read the red text.
     popd
     goto :end
 )
 
-echo  Building frontend for production...
-call npm run build
+echo.
+echo  ---- yarn build ----
+call %YARN% build
 if errorlevel 1 (
-    echo  ERROR: npm run build failed.
+    echo.
+    echo  ERROR: yarn build failed. Scroll up and read the red text.
     popd
     goto :end
 )
 popd
 
+if not exist "frontend\build\index.html" (
+    echo.
+    echo  ERROR: build finished but frontend\build\index.html is missing.
+    goto :end
+)
+
 echo.
 echo  ============================================
 echo    Setup complete.
+echo    frontend\build\index.html was created.
 echo    You can now double-click  Start-PSC.bat
 echo  ============================================
 
